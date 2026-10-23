@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manga Print Generator</title>
+<style>
+:root{color-scheme:dark;--bg:#101116;--panel:#191b23;--line:#30323d;--muted:#a7a9b6;--text:#f4f4f7;--accent:#e6e6eb}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:1120px;margin:auto;padding:28px 18px 60px}header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:26px}
+h1{font-size:clamp(26px,4vw,42px);letter-spacing:-1.4px;line-height:1.1;margin:0}h2{font-size:18px;margin:0 0 12px}
+p{color:var(--muted)}.sub{margin:9px 0 0}.panel{border:1px solid var(--line);background:var(--panel);border-radius:16px;padding:18px;margin:16px 0}
+.row{display:flex;gap:10px;flex-wrap:wrap}.grow{flex:1;min-width:200px}input,select,button{font:inherit;border-radius:10px;padding:12px 13px;border:1px solid var(--line);background:#11131a;color:var(--text)}
+button{cursor:pointer;background:#eeeef2;color:#16171c;font-weight:650;border-color:#eeeef2}button.secondary{background:#22242d;color:var(--text);border-color:var(--line)}button:disabled{opacity:.45;cursor:not-allowed}
+.presets{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.preset{font-size:13px;padding:8px 10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px}
+.card{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#12141a;min-width:0}
+.thumb{width:100%;height:185px;object-fit:contain;background:#08090d;display:block}
+.cardbody{padding:10px}.title{font-weight:650;font-size:13px;overflow-wrap:anywhere}.meta{font-size:12px;color:var(--muted);margin:5px 0}.license{font-size:11px;color:#c9c9d2}.check{display:flex;gap:8px;align-items:center;font-size:13px;margin-top:9px}
+.status{color:var(--muted);min-height:24px}.count{font-variant-numeric:tabular-nums}.notice{font-size:13px;padding:12px 14px;border-radius:10px;background:#24232a;color:#d4d4dc}.collection img{height:220px}
+a{color:#d8d8ff}footer{font-size:12px;color:var(--muted);margin-top:24px}
+@media(max-width:600px){main{padding:20px 12px 40px}.panel{padding:13px}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.thumb{height:155px}}
+</style></head>
+<body><main>
+<header><div><h1>Manga Print Generator</h1><p class="sub">Find permitted images, collect automatically, export one image per A5 page.</p></div><div class="count" id="total">0 collected</div></header>
+<div class="notice">Copyright note: searches use Openverse and Wikimedia Commons, which surface openly licensed media. These sources may not have actual manga pages from commercial series. This app does not scrape Pinterest or bypass access controls.</div>
+<section class="panel">
+<h2>1. Find images</h2>
+<div class="row"><input id="query" class="grow" placeholder="e.g. Naruto manga fan art" value="Jujutsu Kaisen manga fan art"><button id="search">Search sources</button></div>
+<div class="presets">
+<button class="secondary preset" data-q="Jujutsu Kaisen manga fan art">Jujutsu Kaisen</button><button class="secondary preset" data-q="My Hero Academia manga fan art">My Hero Academia</button><button class="secondary preset" data-q="Naruto manga fan art">Naruto</button><button class="secondary preset" data-q="One Piece manga fan art">One Piece</button><button class="secondary preset" data-q="Death Note manga fan art">Death Note</button><button class="secondary preset" data-q="Attack on Titan manga fan art">Attack on Titan</button><button class="secondary preset" data-q="anime manga panel art Creative Commons">Anime panel art</button>
+</div><div class="status" id="searchStatus" role="status"></div><div class="grid" id="results"></div>
+<div class="row" style="margin-top:14px"><button id="collect" disabled>Download selected images</button><button id="selectAll" class="secondary" disabled>Select all results</button></div>
+</section>
+<section class="panel">
+<div class="row" style="align-items:center;justify-content:space-between"><h2 style="margin:0">2. Your collection</h2><div class="row"><select id="orientation"><option value="portrait">A5 portrait</option><option value="landscape">A5 landscape</option></select><button id="refresh" class="secondary">Refresh</button></div></div>
+<p class="sub">Duplicates are removed by image content. Every PDF page contains one image, centered with margins and no stretching.</p>
+<div class="status" id="collectionStatus"></div><div class="grid collection" id="collection"></div>
+<div class="row" style="margin-top:16px"><button id="pdf">Generate & download A5 PDF</button><button id="remove" class="secondary">Remove selected from collection</button></div>
+</section>
+<footer>Downloaded images stay on this computer. Check each source's licence terms and attribution requirements before printing or sharing. A licence label is not a legal guarantee, so verify the source page.</footer>
+</main>
+<script>
+const $=s=>document.querySelector(s);let results=[],collection=[],selectedResults=new Set(),selectedCollection=new Set();
+function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function resultCard(x,i){return `<article class="card"><img class="thumb" loading="lazy" src="${esc(x.thumbnail)}" alt=""><div class="cardbody"><div class="title">${esc(x.title)}</div><div class="meta">${esc(x.source)} · ${esc(x.creator)}</div><div class="license">${esc(x.license)}</div><label class="check"><input type="checkbox" data-result="${i}" ${selectedResults.has(i)?'checked':''}> Select</label><div class="meta"><a target="_blank" rel="noopener" href="${esc(x.page_url)}">Source page</a> · <a target="_blank" rel="noopener" href="${esc(x.license_url)}">Licence</a></div></div></article>`}
+function collectionCard(x,i){return `<article class="card"><img class="thumb" loading="lazy" src="${esc(x.thumbnail)}" alt=""><div class="cardbody"><div class="title">${esc(x.title)}</div><div class="meta">${esc(x.source)} · ${esc(x.width)}×${esc(x.height)}</div><div class="license">${esc(x.license)}</div><label class="check"><input type="checkbox" data-collection="${i}" ${selectedCollection.has(x.id)?'checked':''}> Select to remove</label><div class="meta"><a target="_blank" rel="noopener" href="${esc(x.page_url)}">Source page</a></div></div></article>`}
+async function search(){const q=$('#query').value.trim();if(!q)return;$('#searchStatus').textContent='Searching Openverse and Wikimedia Commons…';$('#results').innerHTML='';$('#search').disabled=true;try{const r=await fetch('/api/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:q})});const d=await r.json();if(!r.ok)throw Error(d.error||'Search failed');results=d.results||[];selectedResults.clear();$('#results').innerHTML=results.map(resultCard).join('')||'<p>No licensed results found. Try a broader search.</p>';$('#searchStatus').textContent=`${results.length} new results found.`+(d.errors?.length?' Some sources failed: '+d.errors.join(' | '):'');$('#collect').disabled=!results.length;$('#selectAll').disabled=!results.length;}catch(e){$('#searchStatus').textContent=e.message}finally{$('#search').disabled=false}}
+async function refresh(){const r=await fetch('/api/collection');collection=await r.json();$('#total').textContent=`${collection.length} collected`;$('#collection').innerHTML=collection.map(collectionCard).join('')||'<p>No images collected yet.</p>';$('#collectionStatus').textContent=`${collection.length} unique image(s). PDF will contain ${collection.length} page(s).`; }
+$('#search').onclick=search;document.querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>{$('#query').value=b.dataset.q;search()});
+$('#results').addEventListener('change',e=>{const i=Number(e.target.dataset.result);if(!Number.isNaN(i)&&e.target.dataset.result!==undefined){e.target.checked?selectedResults.add(i):selectedResults.delete(i)}});
+$('#collection').addEventListener('change',e=>{const i=Number(e.target.dataset.collection);if(e.target.dataset.collection!==undefined){const id=collection[i]?.id;e.target.checked?selectedCollection.add(id):selectedCollection.delete(id)}});
+$('#selectAll').onclick=()=>{selectedResults=new Set(results.map((_,i)=>i));$('#results').innerHTML=results.map(resultCard).join('')};
+$('#collect').onclick=async()=>{const items=[...selectedResults].map(i=>results[i]).filter(Boolean);if(!items.length){$('#searchStatus').textContent='Select at least one result first.';return}$('#collect').disabled=true;$('#searchStatus').textContent=`Downloading ${items.length} selected images…`;try{const r=await fetch('/api/collect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items})});const d=await r.json();$('#searchStatus').textContent=`Added ${d.added.length}; skipped ${d.skipped}. Total collection: ${d.total}.`+(d.messages?.length?' '+d.messages.join(' '):'');selectedResults.clear();await refresh()}catch(e){$('#searchStatus').textContent=e.message}finally{$('#collect').disabled=false}};
+$('#refresh').onclick=refresh;
+$('#pdf').onclick=()=>{if(!collection.length){$('#collectionStatus').textContent='Collect some images first.';return}window.location.href='/api/pdf?orientation='+encodeURIComponent($('#orientation').value)};
+$('#remove').onclick=async()=>{if(!selectedCollection.size){$('#collectionStatus').textContent='Select images to remove first.';return}const r=await fetch('/api/remove',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:[...selectedCollection]})});const d=await r.json();selectedCollection.clear();$('#collectionStatus').textContent=`Removed ${d.removed} image(s).`;await refresh()};
+refresh();
+</script></body></html>
